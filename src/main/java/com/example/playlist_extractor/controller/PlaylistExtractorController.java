@@ -7,35 +7,45 @@ import com.google.api.services.youtube.YouTube;
 import com.google.api.services.youtube.model.PlaylistItem;
 import com.google.api.services.youtube.model.PlaylistItemListResponse;
 import com.google.api.services.youtube.model.ResourceId;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+
 @Controller
 public class PlaylistExtractorController {
     private static final Logger logger = LoggerFactory.getLogger(PlaylistExtractorController.class);
-    private static String API_KEY = "AIzaSyCVOf4H7gxfX5rAHaBGKmXzd679QFGTFY4"; // Substitua pela sua chave de API
-        private YouTube youtubeService;
-    
-        public PlaylistExtractorController() {
-            JsonFactory jsonFactory = GsonFactory.getDefaultInstance();
-            try {
-                API_KEY = carregarApiKey("secrets.txt"); // Lê a API key de um arquivo externo
+    private static String API_KEY;
+    private YouTube youtubeService;
+
+    // Construtor que lê a API key do arquivo secrets.txt
+    public PlaylistExtractorController() {
+        JsonFactory jsonFactory = GsonFactory.getDefaultInstance();
+        try {
+            API_KEY = carregarApiKey("secrets.txt");  // Lê a API key de um arquivo externo
             youtubeService = new YouTube.Builder(GoogleNetHttpTransport.newTrustedTransport(), jsonFactory, null)
                     .setApplicationName("SeuProjeto")
                     .build();
@@ -50,69 +60,108 @@ public class PlaylistExtractorController {
     }
 
     @PostMapping("/salvar")
-    public String salvar(@RequestParam("playlist_url") String playlistUrl,
-            @RequestParam("nome_arquivo") String nomeArquivo,
-            Model model) {
+    public ResponseEntity<InputStreamResource> salvar(@RequestParam("playlist_url") String playlistUrl,
+                                                      @RequestParam("nome_arquivo") String nomeArquivo,
+                                                      Model model) throws IOException {
         logger.info("Processando a playlist...");
         String playlistId = playlistUrl.substring(playlistUrl.lastIndexOf("=") + 1);
         List<String> videoDetails = new ArrayList<>();
         List<String> urlsOnly = new ArrayList<>();
 
+        // Caminhos dos arquivos gerados
+        String detalhesFilePath = nomeArquivo + ".txt";
+        String urlsOnlyFilePath = nomeArquivo + "-urlsonly.txt";
+
         try {
             // Obter os vídeos da playlist
             YouTube.PlaylistItems.List request = youtubeService.playlistItems()
-                    .list(Collections.singletonList("snippet")) // Use uma lista para especificar a parte "snippet"
+                    .list(Collections.singletonList("snippet"))
                     .setKey(API_KEY)
                     .setPlaylistId(playlistId)
                     .setMaxResults(50L);
 
             PlaylistItemListResponse response = request.execute();
 
-            // Verifica se a resposta contém itens
             if (response.getItems() != null) {
                 for (PlaylistItem item : response.getItems()) {
                     ResourceId resourceId = item.getSnippet().getResourceId();
                     String videoId = resourceId.getVideoId();
                     String title = item.getSnippet().getTitle();
 
-                    // Logando o vídeo
                     logger.info("Adicionando vídeo: título='{}', id='{}'", title, videoId);
 
-                    // Formatar a tupla com título, ID e URL completa
-                    videoDetails.add(String.format("('%s', '%s', 'https://www.youtube.com/watch?v=%s')", title, videoId,
-                            videoId));
+                    // Adicionar detalhes do vídeo
+                    videoDetails.add(String.format("('%s', '%s', 'https://www.youtube.com/watch?v=%s')", title, videoId, videoId));
                     // Adicionar apenas a URL
                     urlsOnly.add("https://www.youtube.com/watch?v=" + videoId);
                 }
             }
 
             // Escrever o arquivo com as tuplas
-            BufferedWriter writer = new BufferedWriter(new FileWriter(nomeArquivo + ".txt"));
-            for (String detail : videoDetails) {
-                writer.write(detail + "\n");
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(detalhesFilePath))) {
+                for (String detail : videoDetails) {
+                    writer.write(detail + "\n");
+                }
             }
-            writer.close();
 
-            // Escrever o arquivo apenas com as URLs
-            BufferedWriter urlWriter = new BufferedWriter(new FileWriter(nomeArquivo + "-urlsonly.txt"));
-            for (String url : urlsOnly) {
-                urlWriter.write(url + "\n");
+            // Escrever o arquivo apenas com URLs
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(urlsOnlyFilePath))) {
+                for (String url : urlsOnly) {
+                    writer.write(url + "\n");
+                }
             }
-            urlWriter.close();
 
-            model.addAttribute("mensagem", "Arquivos salvos com sucesso!");
+            // Criar o arquivo ZIP
+            String zipFileName = nomeArquivo + ".zip";
+            try (FileOutputStream fos = new FileOutputStream(zipFileName);
+                 ZipOutputStream zos = new ZipOutputStream(fos)) {
+
+                // Adicionar o arquivo de detalhes ao ZIP
+                adicionarArquivoAoZip(detalhesFilePath, zos);
+                // Adicionar o arquivo apenas com URLs ao ZIP
+                adicionarArquivoAoZip(urlsOnlyFilePath, zos);
+            }
+
+            // Retornar o arquivo ZIP para download
+            File zipFile = new File(zipFileName);
+            InputStreamResource resource = new InputStreamResource(new FileInputStream(zipFile));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + zipFile.getName());
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentLength(zipFile.length())
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(resource);
+
         } catch (IOException e) {
             logger.error("Erro ao salvar a playlist", e);
             model.addAttribute("mensagem", "Ocorreu um erro: " + e.getMessage());
+            return ResponseEntity.badRequest().build();
         }
-
-        return "index";
     }
 
     // Método para carregar a API key do arquivo secrets.txt
     private String carregarApiKey(String filePath) throws IOException {
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
-            return br.readLine().trim(); // Lê a primeira linha e remove espaços em branco
+            return br.readLine().trim();  // Lê a primeira linha e remove espaços em branco
+        }
+    }
+
+    // Método auxiliar para adicionar um arquivo ao arquivo ZIP
+    private void adicionarArquivoAoZip(String filePath, ZipOutputStream zos) throws IOException {
+        File file = new File(filePath);
+        try (FileInputStream fis = new FileInputStream(file)) {
+            ZipEntry zipEntry = new ZipEntry(file.getName());
+            zos.putNextEntry(zipEntry);
+
+            byte[] buffer = new byte[1024];
+            int len;
+            while ((len = fis.read(buffer)) > 0) {
+                zos.write(buffer, 0, len);
+            }
+            zos.closeEntry();
         }
     }
 }

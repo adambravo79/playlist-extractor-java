@@ -5,73 +5,121 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Salvar Playlist do YouTube - JAVA</title>
     <style>
-        /* Estilos para o loader e a animação de loading */
-        #loading {
+        /* Estilo para o loader */
+        .loader {
+            border: 16px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 16px solid #3498db;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
             display: none;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Ocultar conteúdo enquanto estiver carregando */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            display: none; /* Ocultar inicialmente */
+        }
+
+        /* Estilo para a mensagem de sucesso ou erro */
+        .message {
             text-align: center;
-            font-size: 18px;
-            color: #333;
-        }
-
-        #loading img {
-            width: 50px;
-            height: 50px;
+            font-size: 1.2em;
             margin-top: 20px;
         }
-
-        #loading p {
-            font-weight: bold;
-            margin-top: 20px;
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
         }
     </style>
-    <script>
-        // Lista de frases aleatórias
-        const frases = [
-            "Processando a playlist...",
-            "Aguarde um momento, por favor...",
-            "Estamos verificando os vídeos...",
-            "Quase pronto, só mais um pouco...",
-            "Obtendo informações da playlist...",
-            "Preparando os arquivos para download..."
-        ];
-
-        function exibirLoading() {
-            // Exibir a animação de loading
-            document.getElementById('loading').style.display = 'block';
-
-            // Exibir frases aleatórias
-            const fraseElement = document.getElementById('frase');
-            let i = 0;
-            setInterval(() => {
-                const fraseAleatoria = frases[Math.floor(Math.random() * frases.length)];
-                fraseElement.textContent = fraseAleatoria;
-                i++;
-                if (i >= frases.length) i = 0;
-            }, 2000); // Alterna as frases a cada 2 segundos
-        }
-    </script>
 </head>
 <body>
     <h1>Salvar Playlist do YouTube - JAVA</h1>
-
-    <!-- Formulário -->
-    <form action="/salvar" method="post" onsubmit="exibirLoading()">
+    <form id="playlistForm" action="/salvar" method="post">
         <label for="playlist_url">URL da Playlist:</label><br>
         <input type="text" id="playlist_url" name="playlist_url" required><br><br>
-
+        
         <label for="nome_arquivo">Nome do Arquivo:</label><br>
         <input type="text" id="nome_arquivo" name="nome_arquivo" required><br><br>
-
+        
         <input type="submit" value="Salvar">
     </form>
 
-    <!-- Mensagem de sucesso/erro -->
-    <p th:text="${mensagem}"></p>
-
-    <!-- Seção de animação de loading -->
-    <div id="loading">
-        <img src="https://i.imgur.com/llF5iyg.gif" alt="Carregando...">
-        <p id="frase">Processando a playlist...</p>
+    <!-- Loader de animação -->
+    <div class="loading-overlay">
+        <div class="loader"></div>
     </div>
+
+    <!-- Elemento para exibir a mensagem de sucesso ou erro -->
+    <p id="mensagem" class="message"></p>
+
+    <script>
+        const form = document.getElementById('playlistForm');
+        const loader = document.querySelector('.loading-overlay');
+        const mensagemElement = document.getElementById('mensagem');
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault(); // Evita o envio normal do formulário
+            loader.style.display = 'flex'; // Exibe o loader
+            mensagemElement.textContent = ''; // Limpa mensagens anteriores
+
+            const formData = new FormData(form);
+            const playlistUrl = formData.get('playlist_url');
+            const nomeArquivo = formData.get('nome_arquivo');
+
+            // Enviar a solicitação via Fetch para gerar e baixar o arquivo ZIP
+            fetch(`/salvar?playlist_url=${encodeURIComponent(playlistUrl)}&nome_arquivo=${encodeURIComponent(nomeArquivo)}`, {
+                method: 'POST',
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob(); // Converte a resposta em um blob para download
+                } else {
+                    throw new Error('Erro ao processar a playlist.');
+                }
+            })
+            .then(blob => {
+                // Cria um link para o arquivo ZIP e dispara o download
+                const downloadLink = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                downloadLink.href = url;
+                downloadLink.download = `${nomeArquivo}.zip`;
+                downloadLink.click();
+                URL.revokeObjectURL(url); // Limpa o objeto URL
+
+                // Esconde o loader após o download começar
+                loader.style.display = 'none';
+
+                // Exibe mensagem de sucesso
+                mensagemElement.textContent = 'Download concluído com sucesso!';
+                mensagemElement.classList.remove('error');
+                mensagemElement.classList.add('success');
+            })
+            .catch(error => {
+                // Em caso de erro, ocultar o loader e mostrar uma mensagem de erro
+                loader.style.display = 'none';
+                mensagemElement.textContent = 'Erro: ' + error.message;
+                mensagemElement.classList.remove('success');
+                mensagemElement.classList.add('error');
+            });
+        });
+    </script>
 </body>
 </html>
