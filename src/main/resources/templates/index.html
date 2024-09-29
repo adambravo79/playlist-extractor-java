@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salvar Playlist do YouTube - JAVA</title>
+    <style>
+        /* Estilos para o loader e a animação de loading */
+        #loading {
+            display: none;
+            text-align: center;
+            font-size: 18px;
+            color: #333;
+        }
+
+        #loading img {
+            width: 50px;
+            height: 50px;
+            margin-top: 20px;
+        }
+
+        #loading p {
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+    <script>
+        // Lista de frases aleatórias
+        const frases = [
+            "Processando a playlist...",
+            "Aguarde um momento, por favor...",
+            "Estamos verificando os vídeos...",
+            "Quase pronto, só mais um pouco...",
+            "Obtendo informações da playlist...",
+            "Preparando os arquivos para download..."
+        ];
+
+        function exibirLoading() {
+            // Exibir a animação de loading
+            document.getElementById('loading').style.display = 'block';
+
+            // Exibir frases aleatórias
+            const fraseElement = document.getElementById('frase');
+            let i = 0;
+            setInterval(() => {
+                const fraseAleatoria = frases[Math.floor(Math.random() * frases.length)];
+                fraseElement.textContent = fraseAleatoria;
+                i++;
+                if (i >= frases.length) i = 0;
+            }, 2000); // Alterna as frases a cada 2 segundos
+        }
+    </script>
+</head>
+<body>
+    <h1>Salvar Playlist do YouTube - JAVA</h1>
+
+    <!-- Formulário -->
+    <form action="/salvar" method="post" onsubmit="exibirLoading()">
+        <label for="playlist_url">URL da Playlist:</label><br>
+        <input type="text" id="playlist_url" name="playlist_url" required><br><br>
+
+        <label for="nome_arquivo">Nome do Arquivo:</label><br>
+        <input type="text" id="nome_arquivo" name="nome_arquivo" required><br><br>
+
+        <input type="submit" value="Salvar">
+    </form>
+
+    <!-- Mensagem de sucesso/erro -->
+    <p th:text="${mensagem}"></p>
+
+    <!-- Seção de animação de loading -->
+    <div id="loading">
+        <img src="https://i.imgur.com/llF5iyg.gif" alt="Carregando...">
+        <p id="frase">Processando a playlist...</p>
+    </div>
+</body>
+</html>
