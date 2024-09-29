@@ -38,7 +38,7 @@ public class PlaylistExtractorController {
     public PlaylistExtractorController() {
         JsonFactory jsonFactory = GsonFactory.getDefaultInstance();
         try {
-            API_KEY = carregarApiKey("secrets.txt");  // Lê a API key de um arquivo externo
+            API_KEY = carregarApiKey("secrets.txt"); // Lê a API key de um arquivo externo
             youtubeService = new YouTube.Builder(GoogleNetHttpTransport.newTrustedTransport(), jsonFactory, null)
                     .setApplicationName("SeuProjeto")
                     .build();
@@ -52,20 +52,26 @@ public class PlaylistExtractorController {
         return "index";
     }
 
-/*     @PostMapping("/salvar")
-    public ResponseEntity<InputStreamResource> salvar(@RequestParam("playlist_url") String playlistUrl,
-                                                      @RequestParam("nome_arquivo") String nomeArquivo,
-                                                      Model model) throws IOException {
+    @PostMapping("/salvar")
+    public String salvar(@RequestParam("playlist_url") String playlistUrl,
+            @RequestParam("nome_arquivo") String nomeArquivo,
+            Model model) {
         logger.info("Processando a playlist...");
         String playlistId = playlistUrl.substring(playlistUrl.lastIndexOf("=") + 1);
         List<String> videoDetails = new ArrayList<>();
         List<String> urlsOnly = new ArrayList<>();
 
-        // Caminhos dos arquivos gerados
-        String detalhesFilePath = nomeArquivo + ".txt";
-        String urlsOnlyFilePath = nomeArquivo + "-urlsonly.txt";
-
+        // Definindo o diretório de saída
+        Path outputDirectory = Paths.get("arquivos");
         try {
+            if (!Files.exists(outputDirectory)) {
+                Files.createDirectories(outputDirectory); // Cria o diretório caso não exista
+            }
+
+            // Caminhos dos arquivos gerados
+            Path detalhesFilePath = outputDirectory.resolve(nomeArquivo + ".txt");
+            Path urlsOnlyFilePath = outputDirectory.resolve(nomeArquivo + "-urlsonly.txt");
+
             // Obter os vídeos da playlist
             YouTube.PlaylistItems.List request = youtubeService.playlistItems()
                     .list(Collections.singletonList("snippet"))
@@ -84,143 +90,57 @@ public class PlaylistExtractorController {
                     logger.info("Adicionando vídeo: título='{}', id='{}'", title, videoId);
 
                     // Adicionar detalhes do vídeo
-                    videoDetails.add(String.format("('%s', '%s', 'https://www.youtube.com/watch?v=%s')", title, videoId, videoId));
+                    videoDetails.add(String.format("('%s', '%s', 'https://www.youtube.com/watch?v=%s')", title, videoId,
+                            videoId));
                     // Adicionar apenas a URL
                     urlsOnly.add("https://www.youtube.com/watch?v=" + videoId);
                 }
             }
 
             // Escrever o arquivo com as tuplas
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(detalhesFilePath))) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(detalhesFilePath.toFile()))) {
                 for (String detail : videoDetails) {
                     writer.write(detail + "\n");
                 }
+                model.addAttribute("mensagem",
+                        "Arquivo de detalhes salvo com sucesso: " + detalhesFilePath.toAbsolutePath());
             }
 
             // Escrever o arquivo apenas com URLs
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(urlsOnlyFilePath))) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(urlsOnlyFilePath.toFile()))) {
                 for (String url : urlsOnly) {
                     writer.write(url + "\n");
                 }
+                model.addAttribute("mensagem",
+                        "Arquivo de URLs salvo com sucesso: " + urlsOnlyFilePath.toAbsolutePath());
             }
 
             // Criar o arquivo ZIP
             String zipFileName = nomeArquivo + ".zip";
-            try (FileOutputStream fos = new FileOutputStream(zipFileName);
-                 ZipOutputStream zos = new ZipOutputStream(fos)) {
+            Path zipFilePath = outputDirectory.resolve(zipFileName);
+            try (FileOutputStream fos = new FileOutputStream(zipFilePath.toFile());
+                    ZipOutputStream zos = new ZipOutputStream(fos)) {
 
                 // Adicionar o arquivo de detalhes ao ZIP
-                adicionarArquivoAoZip(detalhesFilePath, zos);
+                adicionarArquivoAoZip(detalhesFilePath.toString(), zos);
                 // Adicionar o arquivo apenas com URLs ao ZIP
-                adicionarArquivoAoZip(urlsOnlyFilePath, zos);
+                adicionarArquivoAoZip(urlsOnlyFilePath.toString(), zos);
             }
 
-            // Retornar o arquivo ZIP para download
-            File zipFile = new File(zipFileName);
-            InputStreamResource resource = new InputStreamResource(new FileInputStream(zipFile));
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + zipFile.getName());
-
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .contentLength(zipFile.length())
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .body(resource);
+            model.addAttribute("mensagem", "Arquivo ZIP gerado com sucesso: " + zipFilePath.toAbsolutePath());
+            return "index"; // Redireciona para a página index
 
         } catch (IOException e) {
             logger.error("Erro ao salvar a playlist", e);
             model.addAttribute("mensagem", "Ocorreu um erro: " + e.getMessage());
-            return ResponseEntity.badRequest().build();
+            return "index"; // Redireciona para a página index com a mensagem de erro
         }
     }
- */
-@PostMapping("/salvar")
-public String salvar(@RequestParam("playlist_url") String playlistUrl,
-                     @RequestParam("nome_arquivo") String nomeArquivo,
-                     Model model) {
-    logger.info("Processando a playlist...");
-    String playlistId = playlistUrl.substring(playlistUrl.lastIndexOf("=") + 1);
-    List<String> videoDetails = new ArrayList<>();
-    List<String> urlsOnly = new ArrayList<>();
-
-    // Definindo o diretório de saída
-    Path outputDirectory = Paths.get("arquivos");
-    try {
-        if (!Files.exists(outputDirectory)) {
-            Files.createDirectories(outputDirectory); // Cria o diretório caso não exista
-        }
-
-        // Caminhos dos arquivos gerados
-        Path detalhesFilePath = outputDirectory.resolve(nomeArquivo + ".txt");
-        Path urlsOnlyFilePath = outputDirectory.resolve(nomeArquivo + "-urlsonly.txt");
-
-        // Obter os vídeos da playlist
-        YouTube.PlaylistItems.List request = youtubeService.playlistItems()
-                .list(Collections.singletonList("snippet"))
-                .setKey(API_KEY)
-                .setPlaylistId(playlistId)
-                .setMaxResults(50L);
-
-        PlaylistItemListResponse response = request.execute();
-
-        if (response.getItems() != null) {
-            for (PlaylistItem item : response.getItems()) {
-                ResourceId resourceId = item.getSnippet().getResourceId();
-                String videoId = resourceId.getVideoId();
-                String title = item.getSnippet().getTitle();
-
-                logger.info("Adicionando vídeo: título='{}', id='{}'", title, videoId);
-
-                // Adicionar detalhes do vídeo
-                videoDetails.add(String.format("('%s', '%s', 'https://www.youtube.com/watch?v=%s')", title, videoId, videoId));
-                // Adicionar apenas a URL
-                urlsOnly.add("https://www.youtube.com/watch?v=" + videoId);
-            }
-        }
-
-        // Escrever o arquivo com as tuplas
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(detalhesFilePath.toFile()))) {
-            for (String detail : videoDetails) {
-                writer.write(detail + "\n");
-            }
-            model.addAttribute("mensagem", "Arquivo de detalhes salvo com sucesso: " + detalhesFilePath.toAbsolutePath());
-        }
-
-        // Escrever o arquivo apenas com URLs
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(urlsOnlyFilePath.toFile()))) {
-            for (String url : urlsOnly) {
-                writer.write(url + "\n");
-            }
-            model.addAttribute("mensagem", "Arquivo de URLs salvo com sucesso: " + urlsOnlyFilePath.toAbsolutePath());
-        }
-
-        // Criar o arquivo ZIP
-        String zipFileName = nomeArquivo + ".zip";
-        Path zipFilePath = outputDirectory.resolve(zipFileName);
-        try (FileOutputStream fos = new FileOutputStream(zipFilePath.toFile());
-             ZipOutputStream zos = new ZipOutputStream(fos)) {
-
-            // Adicionar o arquivo de detalhes ao ZIP
-            adicionarArquivoAoZip(detalhesFilePath.toString(), zos);
-            // Adicionar o arquivo apenas com URLs ao ZIP
-            adicionarArquivoAoZip(urlsOnlyFilePath.toString(), zos);
-        }
-
-        model.addAttribute("mensagem", "Arquivo ZIP gerado com sucesso: " + zipFilePath.toAbsolutePath());
-        return "index"; // Redireciona para a página index
-
-    } catch (IOException e) {
-        logger.error("Erro ao salvar a playlist", e);
-        model.addAttribute("mensagem", "Ocorreu um erro: " + e.getMessage());
-        return "index"; // Redireciona para a página index com a mensagem de erro
-    }
-}
 
     // Método para carregar a API key do arquivo secrets.txt
     private String carregarApiKey(String filePath) throws IOException {
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
-            return br.readLine().trim();  // Lê a primeira linha e remove espaços em branco
+            return br.readLine().trim(); // Lê a primeira linha e remove espaços em branco
         }
     }
 
