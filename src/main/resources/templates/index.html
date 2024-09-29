@@ -68,7 +68,7 @@
     </div>
 
     <!-- Elemento para exibir a mensagem de sucesso ou erro -->
-    <p id="mensagem" class="message"></p>
+    <p th:text="${mensagem}" id="mensagem" class="message"></p>
 
     <script>
         const form = document.getElementById('playlistForm');
