@@ -36,4 +36,3 @@ mvnw
 mvnw.cmd
 .mvn/wrapper/maven-wrapper.properties
 arquivos/
-tokens/StoredCredential
