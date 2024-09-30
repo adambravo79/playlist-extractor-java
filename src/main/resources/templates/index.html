@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,8 +19,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         /* Ocultar conteúdo enquanto estiver carregando */
@@ -33,7 +39,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            display: none; /* Ocultar inicialmente */
+            display: none;
+            /* Ocultar inicialmente */
         }
 
         /* Estilo para a mensagem de sucesso ou erro */
@@ -42,23 +49,26 @@
             font-size: 1.2em;
             margin-top: 20px;
         }
+
         .success {
             color: green;
         }
+
         .error {
             color: red;
         }
     </style>
 </head>
+
 <body>
     <h1>Salvar Playlist do YouTube - JAVA</h1>
     <form id="playlistForm" action="/salvar" method="post">
         <label for="playlist_url">URL da Playlist:</label><br>
         <input type="text" id="playlist_url" name="playlist_url" required><br><br>
-        
+
         <label for="nome_arquivo">Nome do Arquivo:</label><br>
         <input type="text" id="nome_arquivo" name="nome_arquivo" required><br><br>
-        
+
         <input type="submit" value="Salvar">
     </form>
 
@@ -75,51 +85,54 @@
         const loader = document.querySelector('.loading-overlay');
         const mensagemElement = document.getElementById('mensagem');
 
-        form.addEventListener('submit', function(event) {
+        form.addEventListener('submit', function (event) {
             event.preventDefault(); // Evita o envio normal do formulário
             loader.style.display = 'flex'; // Exibe o loader
             mensagemElement.textContent = ''; // Limpa mensagens anteriores
 
             const formData = new FormData(form);
-            const playlistUrl = formData.get('playlist_url');
-            const nomeArquivo = formData.get('nome_arquivo');
+            const nomeArquivo = formData.get('nome_arquivo'); // Obter o nome do arquivo do FormData
+            const actionURL = form.action; // Obtém a URL de ação do formulário
 
             // Enviar a solicitação via Fetch para gerar e baixar o arquivo ZIP
-            fetch(`/salvar?playlist_url=${encodeURIComponent(playlistUrl)}&nome_arquivo=${encodeURIComponent(nomeArquivo)}`, {
+            fetch(actionURL, {
                 method: 'POST',
+                body: formData,
             })
-            .then(response => {
-                if (response.ok) {
-                    return response.blob(); // Converte a resposta em um blob para download
-                } else {
-                    throw new Error('Erro ao processar a playlist.');
-                }
-            })
-            .then(blob => {
-                // Cria um link para o arquivo ZIP e dispara o download
-                const downloadLink = document.createElement('a');
-                const url = URL.createObjectURL(blob);
-                downloadLink.href = url;
-                downloadLink.download = `${nomeArquivo}.zip`;
-                downloadLink.click();
-                URL.revokeObjectURL(url); // Limpa o objeto URL
+                .then(response => {
+                    if (response.ok) {
+                        // Cria um link para o arquivo ZIP e dispara o download
+                        return response.blob(); // Converte a resposta em um blob para download
+                    } else {
+                        throw new Error('Erro ao processar a playlist.');
+                    }
+                })
+                .then(blob => {
+                    const downloadLink = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    downloadLink.href = url;
+                    downloadLink.download = `${nomeArquivo}.zip`; // Usa nomeArquivo aqui
+                    downloadLink.click();
+                    URL.revokeObjectURL(url); // Limpa o objeto URL
 
-                // Esconde o loader após o download começar
-                loader.style.display = 'none';
+                    // Esconde o loader após o download começar
+                    loader.style.display = 'none';
 
-                // Exibe mensagem de sucesso
-                mensagemElement.textContent = 'Download concluído com sucesso!';
-                mensagemElement.classList.remove('error');
-                mensagemElement.classList.add('success');
-            })
-            .catch(error => {
-                // Em caso de erro, ocultar o loader e mostrar uma mensagem de erro
-                loader.style.display = 'none';
-                mensagemElement.textContent = 'Erro: ' + error.message;
-                mensagemElement.classList.remove('success');
-                mensagemElement.classList.add('error');
-            });
+                    // Exibe mensagem de sucesso
+                    mensagemElement.textContent = 'Download concluído com sucesso!';
+                    mensagemElement.classList.remove('error');
+                    mensagemElement.classList.add('success');
+                })
+                .catch(error => {
+                    // Em caso de erro, ocultar o loader e mostrar uma mensagem de erro
+                    loader.style.display = 'none';
+                    mensagemElement.textContent = 'Erro: ' + error.message;
+                    mensagemElement.classList.remove('success');
+                    mensagemElement.classList.add('error');
+                });
         });
+
     </script>
 </body>
+
 </html>

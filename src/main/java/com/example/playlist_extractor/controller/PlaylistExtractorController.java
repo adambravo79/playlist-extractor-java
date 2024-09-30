@@ -7,6 +7,11 @@ import com.google.api.services.youtube.YouTube;
 import com.google.api.services.youtube.model.PlaylistItem;
 import com.google.api.services.youtube.model.PlaylistItemListResponse;
 import com.google.api.services.youtube.model.ResourceId;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,7 +58,7 @@ public class PlaylistExtractorController {
     }
 
     @PostMapping("/salvar")
-    public String salvar(@RequestParam("playlist_url") String playlistUrl,
+    public ResponseEntity<byte[]> salvar(@RequestParam("playlist_url") String playlistUrl,
             @RequestParam("nome_arquivo") String nomeArquivo,
             Model model) {
         logger.info("Processando a playlist...");
@@ -102,8 +107,6 @@ public class PlaylistExtractorController {
                 for (String detail : videoDetails) {
                     writer.write(detail + "\n");
                 }
-                model.addAttribute("mensagem",
-                        "Arquivo de detalhes salvo com sucesso: " + detalhesFilePath.toAbsolutePath());
             }
 
             // Escrever o arquivo apenas com URLs
@@ -111,8 +114,6 @@ public class PlaylistExtractorController {
                 for (String url : urlsOnly) {
                     writer.write(url + "\n");
                 }
-                model.addAttribute("mensagem",
-                        "Arquivo de URLs salvo com sucesso: " + urlsOnlyFilePath.toAbsolutePath());
             }
 
             // Criar o arquivo ZIP
@@ -127,13 +128,16 @@ public class PlaylistExtractorController {
                 adicionarArquivoAoZip(urlsOnlyFilePath.toString(), zos);
             }
 
-            model.addAttribute("mensagem", "Arquivo ZIP gerado com sucesso: " + zipFilePath.toAbsolutePath());
-            return "index"; // Redireciona para a página index
+            // Ler o arquivo ZIP e retornar como resposta
+            byte[] zipBytes = Files.readAllBytes(zipFilePath);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + zipFileName + "\"")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(zipBytes);
 
         } catch (IOException e) {
             logger.error("Erro ao salvar a playlist", e);
-            model.addAttribute("mensagem", "Ocorreu um erro: " + e.getMessage());
-            return "index"; // Redireciona para a página index com a mensagem de erro
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
 
