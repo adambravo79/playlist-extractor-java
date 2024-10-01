@@ -44,7 +44,7 @@ public class PlaylistExtractorController {
     public PlaylistExtractorController() {
         JsonFactory jsonFactory = GsonFactory.getDefaultInstance();
         try {
-            API_KEY = carregarApiKey("src/main/resources/secrets.txt"); // Lê a API key de um arquivo externo
+            API_KEY = carregarApiKey("secrets.txt"); // Lê a API key de um arquivo externo
             youtubeService = new YouTube.Builder(GoogleNetHttpTransport.newTrustedTransport(), jsonFactory, null)
                     .setApplicationName("Salvar URL de Playlist")
                     .build();
@@ -155,7 +155,11 @@ public class PlaylistExtractorController {
 
     // Método para carregar a API key do arquivo secrets.txt
     private String carregarApiKey(String filePath) throws IOException {
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("secrets.txt");
+             BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
+            if (is == null) {
+                throw new FileNotFoundException("Arquivo não encontrado: " + filePath);
+            }
             return br.readLine().trim(); // Lê a primeira linha e remove espaços em branco
         }
     }
