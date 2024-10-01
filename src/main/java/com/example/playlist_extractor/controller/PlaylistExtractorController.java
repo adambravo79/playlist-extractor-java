@@ -1,6 +1,7 @@
 package com.example.playlist_extractor.controller;
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.youtube.YouTube;
@@ -43,9 +44,9 @@ public class PlaylistExtractorController {
     public PlaylistExtractorController() {
         JsonFactory jsonFactory = GsonFactory.getDefaultInstance();
         try {
-            API_KEY = carregarApiKey("secrets.txt"); // Lê a API key de um arquivo externo
+            API_KEY = carregarApiKey("src/main/resources/secrets.txt"); // Lê a API key de um arquivo externo
             youtubeService = new YouTube.Builder(GoogleNetHttpTransport.newTrustedTransport(), jsonFactory, null)
-                    .setApplicationName("SeuProjeto")
+                    .setApplicationName("Salvar URL de Playlist")
                     .build();
         } catch (GeneralSecurityException | IOException e) {
             e.printStackTrace();
@@ -78,30 +79,41 @@ public class PlaylistExtractorController {
             Path urlsOnlyFilePath = outputDirectory.resolve(nomeArquivo + "-urlsonly.txt");
 
             // Obter os vídeos da playlist
-            YouTube.PlaylistItems.List request = youtubeService.playlistItems()
-                    .list(Collections.singletonList("snippet"))
-                    .setKey(API_KEY)
-                    .setPlaylistId(playlistId)
-                    .setMaxResults(50L);
+            try {
+                String nextPageToken = null;
+                do {
+                    YouTube.PlaylistItems.List request = youtubeService.playlistItems()
+                            .list(Collections.singletonList("snippet"))
+                            .setFields("items/snippet/title,items/snippet/resourceId/videoId,nextPageToken")
+                            .setKey(API_KEY)
+                            .setPlaylistId(playlistId)
+                            .setMaxResults(50L)
+                            .setPageToken(nextPageToken);
 
-            PlaylistItemListResponse response = request.execute();
+                    PlaylistItemListResponse response = request.execute();
+                    nextPageToken = response.getNextPageToken();
 
-            if (response.getItems() != null) {
-                for (PlaylistItem item : response.getItems()) {
-                    ResourceId resourceId = item.getSnippet().getResourceId();
-                    String videoId = resourceId.getVideoId();
-                    String title = item.getSnippet().getTitle();
+                    if (response.getItems() != null) {
+                        for (PlaylistItem item : response.getItems()) {
+                            ResourceId resourceId = item.getSnippet().getResourceId();
+                            String videoId = resourceId.getVideoId();
+                            String title = item.getSnippet().getTitle();
 
-                    logger.info("Adicionando vídeo: título='{}', id='{}'", title, videoId);
-
-                    // Adicionar detalhes do vídeo
-                    videoDetails.add(String.format("('%s', '%s', 'https://www.youtube.com/watch?v=%s')", title, videoId,
-                            videoId));
-                    // Adicionar apenas a URL
-                    urlsOnly.add("https://www.youtube.com/watch?v=" + videoId);
+                            videoDetails
+                                    .add(String.format("('%s', '%s', 'https://www.youtube.com/watch?v=%s')", title,
+                                            videoId,
+                                            videoId));
+                            urlsOnly.add("https://www.youtube.com/watch?v=" + videoId);
+                        }
+                    }
+                } while (nextPageToken != null);
+            } catch (GoogleJsonResponseException e) {
+                if (e.getStatusCode() == 403) {
+                    logger.error("Limite de cota atingido, tente novamente mais tarde.");
+                } else {
+                    logger.error("Erro ao acessar API do YouTube: ", e);
                 }
             }
-
             // Escrever o arquivo com as tuplas
             try (BufferedWriter writer = new BufferedWriter(new FileWriter(detalhesFilePath.toFile()))) {
                 for (String detail : videoDetails) {
